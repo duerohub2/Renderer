@@ -50,6 +50,9 @@ export default function Preview({ code, width, height, duration }) {
   const maxTime = Number(duration) || 5;
   const scale = stageWidth > 0 ? Math.min(1, stageWidth / w) : 1;
 
+  // Sebelum lebar terukur, pakai rasio aspek supaya tidak sempat tampil raksasa.
+  const stageStyle = stageWidth > 0 ? { height: Math.round(h * scale) } : { aspectRatio: `${w} / ${h}` };
+
   return (
     <section className="panel">
       <div className="panel-head">
@@ -57,14 +60,22 @@ export default function Preview({ code, width, height, duration }) {
         <span className="tag tag-pink">{w}x{h}</span>
       </div>
       <div className="panel-body">
-        <div className="preview-stage" ref={stageRef} style={{ height: Math.round(h * scale) }}>
+        <div className="preview-stage" ref={stageRef} style={stageStyle}>
           <iframe
             ref={frameRef}
             title="PREVIEW"
             sandbox="allow-scripts allow-same-origin"
             srcDoc={code}
             onLoad={() => applySeek(seek)}
-            style={{ width: w, height: h, transform: `scale(${scale})`, transformOrigin: '0 0' }}
+            style={{
+              position: 'absolute',
+              left: 0,
+              top: 0,
+              width: w,
+              height: h,
+              transform: `scale(${scale})`,
+              transformOrigin: '0 0',
+            }}
           />
           {!code.trim() && <div className="preview-empty">BELUM ADA KODE</div>}
         </div>
