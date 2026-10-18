@@ -20,6 +20,13 @@ export const metadata = {
   description: 'Render kode HTML/CSS/JS menjadi video MP4 atau WebM langsung di browser.',
 };
 
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+  themeColor: '#F5F1E8',
+};
+
 export default function RootLayout({ children }) {
   return (
     <html lang="id" className={`${grotesk.variable} ${mono.variable}`}>
