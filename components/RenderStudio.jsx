@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Editor from './Editor';
 import Preview from './Preview';
+import AiPanel from './AiPanel';
 import Settings from './Settings';
 import ProgressModal from './ProgressModal';
 import ResultPanel from './ResultPanel';
@@ -17,9 +18,18 @@ const DEFAULT_SETTINGS = {
   format: 'mp4',
   bitrate: 5_000_000,
   background: '#ffffff',
+  speed: 1,
+  virtualTime: false,
 };
 const STORAGE_KEY = 'renderizer:v1';
 const WEBCODECS_MESSAGE = 'Browser tidak support WebCodecs. Pakai Chrome/Edge/Safari 16.4+';
+const TABS = [
+  { id: 'editor', label: 'KODE' },
+  { id: 'ai', label: 'AI' },
+  { id: 'preview', label: 'PREVIEW' },
+  { id: 'settings', label: 'ATUR' },
+  { id: 'result', label: 'HASIL' },
+];
 
 export default function RenderStudio() {
   const [code, setCode] = useState('');
@@ -31,6 +41,8 @@ export default function RenderStudio() {
   const [error, setError] = useState('');
   const [unsupported, setUnsupported] = useState(false);
   const [hydrated, setHydrated] = useState(false);
+  const [tab, setTab] = useState('editor');
+  const [undoCode, setUndoCode] = useState(null);
   const abortRef = useRef(null);
 
   useEffect(() => {
@@ -53,11 +65,11 @@ export default function RenderStudio() {
   useEffect(() => {
     if (!hydrated) return;
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ code, settings }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ code: previewCode, settings }));
     } catch {
       /* kuota penuh atau storage diblokir */
     }
-  }, [code, settings, hydrated]);
+  }, [previewCode, settings, hydrated]);
 
   useEffect(() => {
     const timer = setTimeout(() => setPreviewCode(code), 400);
@@ -65,10 +77,26 @@ export default function RenderStudio() {
   }, [code]);
 
   const rendering = status === 'rendering';
+  const hasResult = status === 'done' && Boolean(result);
+  const panel = (name) => `tab-panel ${tab === name ? 'is-active' : ''}`;
 
   const releaseResult = () => {
     if (result) URL.revokeObjectURL(result.url);
     setResult(null);
+  };
+
+  const handleApplyAi = (newCode) => {
+    setUndoCode(code);
+    setCode(newCode);
+    setPreviewCode(newCode);
+    setTab('preview');
+  };
+
+  const handleUndoAi = () => {
+    if (undoCode === null) return;
+    setCode(undoCode);
+    setPreviewCode(undoCode);
+    setUndoCode(null);
   };
 
   const handleRender = async () => {
@@ -109,6 +137,7 @@ export default function RenderStudio() {
       });
       setResult(output);
       setStatus('done');
+      setTab('result');
 
       fetch('/api/history', {
         method: 'POST',
@@ -152,6 +181,7 @@ export default function RenderStudio() {
     releaseResult();
     setError('');
     setStatus('idle');
+    setTab('settings');
   };
 
   return (
@@ -171,17 +201,34 @@ export default function RenderStudio() {
       )}
 
       <div className="grid-two">
-        <Editor code={code} onChange={setCode} onLoadDemo={() => setCode(DEMO_HTML)} disabled={rendering} />
-        <Preview code={previewCode} width={settings.width} height={settings.height} duration={settings.duration} />
+        <div className={panel('editor')}>
+          <Editor code={code} onChange={setCode} onLoadDemo={() => setCode(DEMO_HTML)} disabled={rendering} />
+        </div>
+        <div className={panel('preview')}>
+          <Preview code={previewCode} width={settings.width} height={settings.height} duration={settings.duration} />
+        </div>
       </div>
 
-      <Settings
-        settings={settings}
-        onChange={setSettings}
-        onRender={handleRender}
-        disabled={rendering}
-        blocked={unsupported}
-      />
+      <div className={panel('ai')}>
+        <AiPanel
+          currentCode={code}
+          settings={settings}
+          onApply={handleApplyAi}
+          canUndo={undoCode !== null}
+          onUndo={handleUndoAi}
+          disabled={rendering}
+        />
+      </div>
+
+      <div className={panel('settings')}>
+        <Settings
+          settings={settings}
+          onChange={setSettings}
+          onRender={handleRender}
+          disabled={rendering}
+          blocked={unsupported}
+        />
+      </div>
 
       {error && (
         <div className="panel notice notice-error" role="alert">
@@ -189,11 +236,27 @@ export default function RenderStudio() {
         </div>
       )}
 
-      {status === 'done' && result && (
-        <ResultPanel result={result} onDownload={handleDownload} onReset={handleReset} />
+      {hasResult && (
+        <div className={panel('result')}>
+          <ResultPanel result={result} onDownload={handleDownload} onReset={handleReset} />
+        </div>
       )}
 
       {rendering && <ProgressModal progress={progress} onCancel={handleCancel} />}
+
+      <nav className="tabbar" aria-label="NAVIGASI">
+        {TABS.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            className={`tab ${tab === item.id ? 'is-active' : ''}`}
+            disabled={item.id === 'result' && !hasResult}
+            onClick={() => setTab(item.id)}
+          >
+            {item.label}
+          </button>
+        ))}
+      </nav>
     </main>
   );
 }
