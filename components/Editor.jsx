@@ -11,6 +11,7 @@ function readFile(file, onChange) {
 export default function Editor({ code, onChange, onLoadDemo, disabled }) {
   const fileRef = useRef(null);
   const [dragging, setDragging] = useState(false);
+  const [backup, setBackup] = useState('');
 
   const handleFile = (event) => {
     const file = event.target.files && event.target.files[0];
@@ -38,6 +39,17 @@ export default function Editor({ code, onChange, onLoadDemo, disabled }) {
     });
   };
 
+  const handleClear = () => {
+    if (!code) return;
+    setBackup(code);
+    onChange('');
+  };
+
+  const handleRestore = () => {
+    onChange(backup);
+    setBackup('');
+  };
+
   return (
     <section className="panel">
       <div className="panel-head">
@@ -60,6 +72,14 @@ export default function Editor({ code, onChange, onLoadDemo, disabled }) {
           <button type="button" className="btn btn-mint" onClick={onLoadDemo} disabled={disabled}>
             LOAD DEMO
           </button>
+          <button type="button" className="btn btn-pink" onClick={handleClear} disabled={disabled || !code}>
+            HAPUS
+          </button>
+          {!code && backup && (
+            <button type="button" className="btn btn-yellow" onClick={handleRestore} disabled={disabled}>
+              KEMBALIKAN
+            </button>
+          )}
           <input ref={fileRef} type="file" accept=".html,.htm,.txt" onChange={handleFile} hidden />
         </div>
         <textarea
