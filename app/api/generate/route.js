@@ -135,7 +135,7 @@ export async function POST(request) {
   }
 
   const width = clampInt(body?.width, 64, 1920, 1280);
-  const height = clampInt(body?.height, 64, 1080, 720);
+  const height = clampInt(body?.height, 64, 1920, 720);
   const duration = clampInt(body?.duration, 1, 90, 5);
 
   const userMessage =
