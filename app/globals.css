@@ -321,3 +321,78 @@ body {
 
 .input-color { padding: 3px; height: 46px; cursor: pointer; }
 select.input { cursor: pointer; }
+
+.input-check { width: 32px; height: 32px; padding: 0; accent-color: var(--red); cursor: pointer; }
+
+.prompt-area {
+  width: 100%;
+  min-height: 110px;
+  resize: vertical;
+  padding: 12px;
+  border: var(--border);
+  background: #FFFDF6;
+  color: var(--ink);
+  font-family: var(--font-mono), monospace;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.prompt-area:focus { outline: 3px solid var(--blue); outline-offset: 2px; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.tabbar { display: none; }
+.tab-panel { display: block; }
+
+@media (max-width: 900px) {
+  .studio { padding: 12px 12px calc(88px + env(safe-area-inset-bottom, 0px)); gap: 16px; }
+
+  .tab-panel { display: none; }
+  .tab-panel.is-active { display: block; }
+
+  .panel { box-shadow: 3px 3px 0 var(--ink); }
+  .panel-head { padding: 10px 12px; }
+  .panel-title { font-size: 16px; }
+  .panel-body { padding: 12px; }
+
+  .topbar { padding: 10px 12px; }
+  .brand { font-size: 30px; }
+  .brand-sub { font-size: 10px; margin-top: 4px; }
+
+  .btn { min-height: 46px; box-shadow: 3px 3px 0 var(--ink); }
+  .btn:hover:not(:disabled) { transform: none; box-shadow: 3px 3px 0 var(--ink); }
+  .btn-small { min-height: 40px; }
+  .btn-row > .btn { flex: 1 1 auto; }
+  .btn-big { width: 100%; }
+
+  .input, .code-area, .prompt-area { font-size: 16px; }
+  .code-area { min-height: 50vh; }
+  .field-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  .tabbar {
+    display: flex;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 40;
+    background: var(--paper);
+    border-top: var(--border);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .tab {
+    flex: 1;
+    min-height: 56px;
+    border: 0;
+    border-right: var(--border);
+    background: #fff;
+    color: var(--ink);
+    font-family: var(--font-grotesk), system-ui, sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+  }
+  .tab:last-child { border-right: 0; }
+  .tab.is-active { background: var(--yellow); }
+  .tab:disabled { opacity: 0.4; cursor: not-allowed; }
+}
