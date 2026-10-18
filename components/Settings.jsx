@@ -100,6 +100,32 @@ export default function Settings({ settings, onChange, onRender, disabled, block
               onChange={(e) => set('background', e.target.value)}
             />
           </label>
+          <label className="field">
+            <span className="label">KECEPATAN ANIMASI</span>
+            <select
+              className="input"
+              value={settings.speed}
+              disabled={disabled}
+              onChange={(e) => set('speed', Number(e.target.value))}
+            >
+              <option value={0.25}>0.25X (SLOW MOTION)</option>
+              <option value={0.5}>0.5X</option>
+              <option value={1}>1X (NORMAL)</option>
+              <option value={2}>2X</option>
+              <option value={4}>4X (TIMELAPSE)</option>
+            </select>
+          </label>
+          <label className="field">
+            <span className="label">WAKTU VIRTUAL (JS / GSAP / RAF)</span>
+            <input
+              type="checkbox"
+              className="input-check"
+              checked={Boolean(settings.virtualTime)}
+              disabled={disabled}
+              onChange={(e) => set('virtualTime', e.target.checked)}
+            />
+            <span className="hint">AKTIFKAN JIKA ANIMASI MEMAKAI JAVASCRIPT (GSAP, REQUESTANIMATIONFRAME, SETTIMEOUT).</span>
+          </label>
         </div>
 
         <p className="hint">ESTIMASI UKURAN: ~{estimatedMb} MB (MAKS. PADA BITRATE TERPILIH)</p>
