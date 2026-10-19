@@ -18,13 +18,24 @@ const mono = Space_Mono({
 export const metadata = {
   title: 'RENDERIZER - HTML JADI VIDEO',
   description: 'Render kode HTML/CSS/JS menjadi video MP4 atau WebM langsung di browser.',
+  applicationName: 'RENDERIZER',
+  icons: {
+    icon: [
+      { url: '/pwa-icon?s=64', sizes: '64x64', type: 'image/png' },
+      { url: '/pwa-icon?s=192', sizes: '192x192', type: 'image/png' },
+    ],
+    apple: [{ url: '/pwa-icon?s=180', sizes: '180x180', type: 'image/png' }],
+  },
+  other: {
+    'apple-mobile-web-app-title': 'RENDERIZER',
+  },
 };
 
 export const viewport = {
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
-  themeColor: '#F5F1E8',
+  themeColor: '#FFE500',
 };
 
 export default function RootLayout({ children }) {
