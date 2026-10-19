@@ -18,6 +18,7 @@ export default function ResultPanel({ result, onDownload, onReset }) {
           <div><dt>FPS</dt><dd>{result.fps}</dd></div>
           <div><dt>FORMAT</dt><dd>{label}</dd></div>
           <div><dt>UKURAN</dt><dd>{sizeMb} MB</dd></div>
+          <div><dt>AUDIO</dt><dd>{result.hasAudio ? 'YA' : 'TIDAK'}</dd></div>
         </dl>
         <div className="btn-row">
           <button type="button" className="btn btn-yellow btn-big" onClick={onDownload}>
