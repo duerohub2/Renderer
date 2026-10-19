@@ -4,11 +4,16 @@ import { useEffect, useRef, useState } from 'react';
 import Editor from './Editor';
 import Preview from './Preview';
 import AiPanel from './AiPanel';
+import AudioPanel from './AudioPanel';
+import ProjectBar from './ProjectBar';
 import Settings from './Settings';
 import ProgressModal from './ProgressModal';
 import ResultPanel from './ResultPanel';
 import { renderVideo, normalizeSettings, isWebCodecsSupported } from '../lib/renderer';
 import { DEMO_HTML } from '../lib/demos';
+import { createProject, loadProjects, saveProjects, MAX_PROJECTS } from '../lib/projects';
+import { saveAudio, loadAudio, removeAudio, copyAudio } from '../lib/storage';
+import { decodeAudioFile } from '../lib/audio';
 
 const DEFAULT_SETTINGS = {
   width: 1280,
@@ -20,8 +25,11 @@ const DEFAULT_SETTINGS = {
   background: '#ffffff',
   speed: 1,
   virtualTime: false,
+  audioVolume: 1,
+  audioStart: 0,
+  audioLoop: true,
+  audioFade: false,
 };
-const STORAGE_KEY = 'renderizer:v1';
 const WEBCODECS_MESSAGE = 'Browser tidak support WebCodecs. Pakai Chrome/Edge/Safari 16.4+';
 const TABS = [
   { id: 'editor', label: 'KODE' },
@@ -43,46 +51,178 @@ export default function RenderStudio() {
   const [hydrated, setHydrated] = useState(false);
   const [tab, setTab] = useState('editor');
   const [undoCode, setUndoCode] = useState(null);
+  const [projects, setProjects] = useState([]);
+  const [activeId, setActiveId] = useState('');
+  const [audio, setAudio] = useState(null);
+  const [audioBusy, setAudioBusy] = useState(false);
+  const [audioError, setAudioError] = useState('');
   const abortRef = useRef(null);
+  const activeIdRef = useRef('');
+  const audioBufferRef = useRef(null);
+  const audioUrlRef = useRef('');
+
+  const rendering = status === 'rendering';
+  const hasResult = status === 'done' && Boolean(result);
+  const panel = (name) => `tab-panel ${tab === name ? 'is-active' : ''}`;
+
+  const clearAudio = () => {
+    if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current);
+    audioUrlRef.current = '';
+    audioBufferRef.current = null;
+    setAudio(null);
+  };
+
+  const restoreAudio = async (id) => {
+    clearAudio();
+    try {
+      const record = await loadAudio(id);
+      if (!record || !record.blob) return;
+      const buffer = await decodeAudioFile(record.blob);
+      if (activeIdRef.current !== id) return;
+      const url = URL.createObjectURL(record.blob);
+      audioBufferRef.current = buffer;
+      audioUrlRef.current = url;
+      setAudio({ name: record.name, size: record.blob.size, duration: buffer.duration, url });
+    } catch {
+      /* audio tersimpan tidak bisa dibaca, abaikan */
+    }
+  };
 
   useEffect(() => {
     setUnsupported(!isWebCodecsSupported());
-    try {
-      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
-      if (saved) {
-        if (typeof saved.code === 'string') {
-          setCode(saved.code);
-          setPreviewCode(saved.code);
-        }
-        if (saved.settings) setSettings(normalizeSettings({ ...DEFAULT_SETTINGS, ...saved.settings }));
-      }
-    } catch {
-      /* storage tidak tersedia */
-    }
+    const loaded = loadProjects(DEFAULT_SETTINGS);
+    const active = loaded.items.find((p) => p.id === loaded.activeId) || loaded.items[0];
+    activeIdRef.current = active.id;
+    setProjects(loaded.items);
+    setActiveId(active.id);
+    setCode(active.code);
+    setPreviewCode(active.code);
+    setSettings(normalizeSettings({ ...DEFAULT_SETTINGS, ...active.settings }));
     setHydrated(true);
+    restoreAudio(active.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Simpan kode dan pengaturan ke proyek aktif, lalu tulis semua proyek ke browser.
   useEffect(() => {
-    if (!hydrated) return;
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ code: previewCode, settings }));
-    } catch {
-      /* kuota penuh atau storage diblokir */
-    }
-  }, [previewCode, settings, hydrated]);
+    if (!hydrated || !activeId) return;
+    setProjects((prev) =>
+      prev.map((p) => (p.id === activeId ? { ...p, code: previewCode, settings } : p)),
+    );
+  }, [previewCode, settings, activeId, hydrated]);
+
+  useEffect(() => {
+    if (!hydrated || !activeId) return;
+    saveProjects(projects, activeId);
+  }, [projects, activeId, hydrated]);
 
   useEffect(() => {
     const timer = setTimeout(() => setPreviewCode(code), 400);
     return () => clearTimeout(timer);
   }, [code]);
 
-  const rendering = status === 'rendering';
-  const hasResult = status === 'done' && Boolean(result);
-  const panel = (name) => `tab-panel ${tab === name ? 'is-active' : ''}`;
-
   const releaseResult = () => {
     if (result) URL.revokeObjectURL(result.url);
     setResult(null);
+  };
+
+  const openProject = (project) => {
+    activeIdRef.current = project.id;
+    setActiveId(project.id);
+    setCode(project.code);
+    setPreviewCode(project.code);
+    setSettings(normalizeSettings({ ...DEFAULT_SETTINGS, ...project.settings }));
+    setUndoCode(null);
+    setAudioError('');
+    releaseResult();
+    setError('');
+    setStatus('idle');
+    restoreAudio(project.id);
+  };
+
+  const commitCurrent = (list) =>
+    list.map((p) => (p.id === activeId ? { ...p, code, settings, updatedAt: Date.now() } : p));
+
+  const handleSwitchProject = (id) => {
+    if (id === activeId || rendering) return;
+    const list = commitCurrent(projects);
+    const target = list.find((p) => p.id === id);
+    if (!target) return;
+    setProjects(list);
+    openProject(target);
+  };
+
+  const handleNewProject = () => {
+    if (projects.length >= MAX_PROJECTS) {
+      setError(`BATAS ${MAX_PROJECTS} PROYEK TERCAPAI. HAPUS PROYEK YANG TIDAK DIPAKAI.`);
+      return;
+    }
+    const project = createProject(`Proyek ${projects.length + 1}`, '', DEFAULT_SETTINGS);
+    setProjects([...commitCurrent(projects), project]);
+    openProject(project);
+  };
+
+  const handleDuplicateProject = async () => {
+    if (projects.length >= MAX_PROJECTS) {
+      setError(`BATAS ${MAX_PROJECTS} PROYEK TERCAPAI. HAPUS PROYEK YANG TIDAK DIPAKAI.`);
+      return;
+    }
+    const current = projects.find((p) => p.id === activeId);
+    const copy = createProject(`${current ? current.name : 'Proyek'} (salinan)`, code, settings);
+    await copyAudio(activeId, copy.id).catch(() => {});
+    setProjects([...commitCurrent(projects), copy]);
+    openProject(copy);
+  };
+
+  const handleRenameProject = () => {
+    const current = projects.find((p) => p.id === activeId);
+    if (!current) return;
+    const name = window.prompt('NAMA PROYEK', current.name);
+    if (name === null) return;
+    const trimmed = name.trim().slice(0, 40);
+    if (!trimmed) return;
+    setProjects(projects.map((p) => (p.id === activeId ? { ...p, name: trimmed } : p)));
+  };
+
+  const handleDeleteProject = () => {
+    const current = projects.find((p) => p.id === activeId);
+    if (!current) return;
+    if (!window.confirm(`HAPUS PROYEK "${current.name}"? KODE DAN AUDIO-NYA IKUT TERHAPUS.`)) return;
+
+    removeAudio(activeId).catch(() => {});
+    const remaining = projects.filter((p) => p.id !== activeId);
+    if (remaining.length === 0) {
+      const fresh = createProject('Proyek 1', '', DEFAULT_SETTINGS);
+      setProjects([fresh]);
+      openProject(fresh);
+      return;
+    }
+    setProjects(remaining);
+    openProject(remaining[0]);
+  };
+
+  const handlePickAudio = async (file) => {
+    setAudioError('');
+    setAudioBusy(true);
+    try {
+      const buffer = await decodeAudioFile(file);
+      clearAudio();
+      const url = URL.createObjectURL(file);
+      audioBufferRef.current = buffer;
+      audioUrlRef.current = url;
+      setAudio({ name: file.name, size: file.size, duration: buffer.duration, url });
+      saveAudio(activeId, { name: file.name, blob: file }).catch(() => {});
+    } catch (err) {
+      setAudioError((err && err.message) || 'GAGAL MEMBACA AUDIO.');
+    } finally {
+      setAudioBusy(false);
+    }
+  };
+
+  const handleRemoveAudio = () => {
+    clearAudio();
+    setAudioError('');
+    removeAudio(activeId).catch(() => {});
   };
 
   const handleApplyAi = (newCode) => {
@@ -116,6 +256,17 @@ export default function RenderStudio() {
     const controller = new AbortController();
     abortRef.current = controller;
 
+    const audioInput =
+      audio && audioBufferRef.current
+        ? {
+            buffer: audioBufferRef.current,
+            startAt: config.audioStart,
+            volume: config.audioVolume,
+            fade: config.audioFade,
+            loop: config.audioLoop,
+          }
+        : null;
+
     let wakeLock = null;
     try {
       if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen');
@@ -132,6 +283,7 @@ export default function RenderStudio() {
       const output = await renderVideo({
         code,
         ...config,
+        audio: audioInput,
         signal: controller.signal,
         onProgress: setProgress,
       });
@@ -194,6 +346,17 @@ export default function RenderStudio() {
         <span className="tag tag-red">100% CLIENT-SIDE</span>
       </header>
 
+      <ProjectBar
+        projects={projects}
+        activeId={activeId}
+        onSwitch={handleSwitchProject}
+        onNew={handleNewProject}
+        onDuplicate={handleDuplicateProject}
+        onRename={handleRenameProject}
+        onDelete={handleDeleteProject}
+        disabled={rendering}
+      />
+
       {unsupported && (
         <div className="panel notice" role="alert">
           {WEBCODECS_MESSAGE}
@@ -221,13 +384,25 @@ export default function RenderStudio() {
       </div>
 
       <div className={panel('settings')}>
-        <Settings
-          settings={settings}
-          onChange={setSettings}
-          onRender={handleRender}
-          disabled={rendering}
-          blocked={unsupported}
-        />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+          <AudioPanel
+            audio={audio}
+            busy={audioBusy}
+            error={audioError}
+            settings={settings}
+            onChange={setSettings}
+            onPick={handlePickAudio}
+            onRemove={handleRemoveAudio}
+            disabled={rendering}
+          />
+          <Settings
+            settings={settings}
+            onChange={setSettings}
+            onRender={handleRender}
+            disabled={rendering}
+            blocked={unsupported}
+          />
+        </div>
       </div>
 
       {error && (
